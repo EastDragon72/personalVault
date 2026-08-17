@@ -40,6 +40,7 @@
     chevronRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>',
     chevronDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
     arrowLeft: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2.4v-.2a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 8.4 15a1.7 1.7 0 0 0-1.56-1.03H6v-2.4h.2A1.7 1.7 0 0 0 7.76 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.7-1.7.06.06A1.7 1.7 0 0 0 11 6.08V6h2.4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06A1.7 1.7 0 0 0 17.66 10a1.7 1.7 0 0 0 1.56 1.03h.2v2.4h-.2A1.7 1.7 0 0 0 19.4 15z"/></svg>',
     folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
   };
 
@@ -347,6 +348,7 @@
     document.getElementById("newItemBtn").onclick = openNewItem;
     document.getElementById("exportBtn").onclick = handleExport;
     document.getElementById("importBtn").onclick = () => importFileInput.click();
+    document.getElementById("settingsBtn").onclick = showSettings;
     document.getElementById("lockBtn").onclick = lockVault;
 
     const searchInput = document.getElementById("searchInput");
@@ -441,6 +443,97 @@
         goMain();
       };
     });
+  }
+
+  // ---------------- 설정 / 비밀번호 변경 ----------------
+
+  function showSettings() {
+    showModal(`
+      <h2 style="margin-top:0">설정</h2>
+      <button class="btn btn-primary" id="changePwBtn">비밀번호 변경</button>
+      <button class="btn" id="mClose">닫기</button>
+    `, () => {
+      document.getElementById("changePwBtn").onclick = showChangePassword;
+      document.getElementById("mClose").onclick = closeModal;
+    });
+  }
+
+  function showChangePassword() {
+    closeModal();
+    showModal(`
+      <h2 style="margin-top:0">비밀번호 변경</h2>
+      <label for="currentPw">현재 비밀번호</label>
+      <input type="password" id="currentPw" autocomplete="current-password">
+      <label for="newPw">새 비밀번호</label>
+      <input type="password" id="newPw" autocomplete="new-password">
+      <label for="newPw2">새 비밀번호 확인</label>
+      <input type="password" id="newPw2" autocomplete="new-password">
+      <div class="error-msg" id="changePwErr"></div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn" id="changePwCancel">취소</button>
+        <button class="btn btn-primary" id="changePwConfirm">변경</button>
+      </div>
+    `, () => {
+      document.getElementById("changePwCancel").onclick = closeModal;
+      document.getElementById("changePwConfirm").onclick = handleChangePassword;
+      document.getElementById("currentPw").focus();
+      document.querySelectorAll("#modalOverlay input").forEach(el => {
+        el.addEventListener("keydown", e => { if (e.key === "Enter") handleChangePassword(); });
+      });
+    });
+  }
+
+  async function handleChangePassword() {
+    const currentPw = document.getElementById("currentPw").value;
+    const newPw = document.getElementById("newPw").value;
+    const newPw2 = document.getElementById("newPw2").value;
+    const err = document.getElementById("changePwErr");
+    if (!currentPw || !newPw || !newPw2) {
+      err.textContent = "모든 비밀번호를 입력해주세요.";
+      return;
+    }
+    if (newPw !== newPw2) {
+      err.textContent = "새 비밀번호가 일치하지 않습니다.";
+      return;
+    }
+    if (newPw.length < 4) {
+      err.textContent = "새 비밀번호는 4자 이상 입력해주세요.";
+      return;
+    }
+
+    const record = PVStorage.loadVaultRecord();
+    if (!record) {
+      err.textContent = "보관함 정보를 찾을 수 없습니다.";
+      return;
+    }
+
+    try {
+      // 현재 비밀번호가 맞는지 기존 데이터를 복호화해서 확인합니다.
+      const currentKey = await PVCrypto.deriveKeyFromSalt(currentPw, record.saltB64);
+      const decrypted = await PVCrypto.decryptJSON(currentKey, record.ivB64, record.cipherB64);
+
+      // 새 비밀번호용 새 salt와 키를 생성하고 데이터를 다시 암호화합니다.
+      const { key: newKey, saltB64: newSalt } = await PVCrypto.deriveKeyForNewVault(newPw);
+      const { ivB64: newIv, cipherB64: newCipher } = await PVCrypto.encryptJSON(newKey, decrypted);
+
+      PVStorage.saveVaultRecord({
+        saltB64: newSalt,
+        ivB64: newIv,
+        cipherB64: newCipher,
+        updatedAt: new Date().toISOString()
+      });
+
+      vaultKey = newKey;
+      saltB64 = newSalt;
+      items = decrypted;
+      closeModal();
+      showModal(`
+        <p><strong>비밀번호가 변경되었습니다.</strong><br>다음부터 새 비밀번호를 사용하세요.</p>
+        <div class="btn-row"><button class="btn btn-primary" id="pwDone">확인</button></div>
+      `, () => { document.getElementById("pwDone").onclick = closeModal; });
+    } catch (e) {
+      err.textContent = "현재 비밀번호가 올바르지 않습니다.";
+    }
   }
 
   // ---------------- 내보내기 / 가져오기 ----------------
