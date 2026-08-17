@@ -1,0 +1,15 @@
+{
+  "name": "개인정보 보관함",
+  "short_name": "보관함",
+  "description": "나 혼자 쓰는 개인정보 보관 앱 (오프라인, 로컬 암호화 저장)",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
